@@ -1,24 +1,19 @@
 #include <stdio.h>
-#include <stdbool.h>
 
-#include "stdint_aliases.h"
+#include "common_types.h"
 
-typedef enum: u8 { WHITE, BLACK } PieceColor;
-typedef enum: u8 { EMPTY, PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING } PiecesType;
-typedef struct {
-    PieceColor color: 1;
-    PiecesType type : 3;
-} Piece;
+static ChessBoard main_chess_board = {
+    { {BLACK, ROOK}, {BLACK, KNIGHT}, {BLACK, BISHOP}, {BLACK, QWEEN}, {BLACK, KING}, {BLACK, BISHOP}, {BLACK, KNIGHT}, {BLACK, ROOK} },
+    { {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN} },
+    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
+    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
+    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
+    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
+    { {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN} },
+    { {WHITE, ROOK}, {WHITE, KNIGHT}, {WHITE, BISHOP}, {WHITE, QWEEN}, {WHITE, KING}, {WHITE, BISHOP}, {WHITE, KNIGHT}, {WHITE, ROOK} },
+};
 
-typedef Piece ChessBoard[8][8];
-
-typedef struct {
-    u8 col;
-    u8 row;
-} Position;
-typedef Position Direction;
-
-typedef enum: u8 { OUT_OF_BOUNDS, FREE, SAME_COLOR, OTHER_COLOR } CellState;
+ChessBoard* get_main_chess_board() { return &main_chess_board; }
 
 static void log_position(Position pos) {
     printf("(col: %hhu, row: %hhu)\n", pos.col, pos.row);
@@ -75,6 +70,7 @@ static void show_move_if_valid(ChessBoard board, Position pos, Direction dir, Pi
 }
 
 void show_possible_moves(ChessBoard board, Position pos) {
+    printf("-----------\n");
     const Piece piece = get_piece_at(board, pos);
     Direction pawn_direction = piece.color == WHITE
         ? (Direction) { .row = -1, .col =  0 }
@@ -96,7 +92,6 @@ void show_possible_moves(ChessBoard board, Position pos) {
             aimed_cell = add_positions(pos, pawn_direction);
             if (get_cell_state(board, aimed_cell, piece.color) == OTHER_COLOR)
                 log_position(aimed_cell);
-
             break;
 
         case ROOK:
