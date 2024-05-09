@@ -4,15 +4,14 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const OptMode = std.builtin.OptimizeMode;
     const c_optimize_flag = switch (optimize) {
-        OptMode.Debug        => "-Og",
-        OptMode.ReleaseSafe  => "-O3",
-        OptMode.ReleaseFast  => "-Ofast",
-        OptMode.ReleaseSmall => "-Oz",
+        .Debug        => "-Og",
+        .ReleaseSafe  => "-O3",
+        .ReleaseFast  => "-Ofast",
+        .ReleaseSmall => "-Oz",
     };
 
-    // const lib = b.addExecutable(.{
+    const c_src_dir = "backend";
     const lib = b.addSharedLibrary(.{
         .name = "chess",
         .target = target,
@@ -21,35 +20,34 @@ pub fn build(b: *std.Build) !void {
 
     const allocator = std.heap.page_allocator;
 
-    var src_dir = try std.fs.openIterableDirAbsolute(b.pathFromRoot("backend"), .{});
+    var src_dir = try std.fs.openIterableDirAbsolute(b.pathFromRoot(c_src_dir), .{});
     defer src_dir.close();
     var src_dir_walker = try src_dir.walk(allocator);
     defer src_dir_walker.deinit();
 
-    const c_flags = [_][]const u8 { c_optimize_flag, "-fPIC" };
     var c_source_files = std.ArrayList([]const u8).init(allocator);
     defer {
         for (c_source_files.items) |item| {
-            allocator.free(item);
+            b.allocator.free(item);
         }
         c_source_files.deinit();
     }
 
     while (try src_dir_walker.next()) |entry| {
-        if (entry.kind == std.fs.IterableDir.Entry.Kind.file
-            and entry.path[entry.path.len - 1] == 'c')
-        {
+        if (entry.kind == .file and entry.path[entry.path.len - 1] == 'c') {
             const new_file_path = try c_source_files.addOne();
-            new_file_path.* = try std.fmt.allocPrint(allocator, "backend/{s}", .{ entry.path });
+            new_file_path.* = b.pathJoin(&.{ c_src_dir, entry.path });
         }
     }
 
-    lib.addCSourceFiles(c_source_files.items, &c_flags);
+    lib.addCSourceFiles(c_source_files.items, &.{ c_optimize_flag, "-fPIC" });
+    lib.addIncludePath(.{ .path = std.os.getenv("CPYTHON_HEADER_PATH").? });
     lib.linkLibC();
 
     b.installArtifact(lib);
 
-    const run_cmd = b.addSystemCommand(&[_][]const u8 { "python", "frontend/main.py" });
+    const run_cmd = b.addSystemCommand(&.{ "python", "frontend/main.py" });
+    run_cmd.step.dependOn(b.getInstallStep());
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
