@@ -19,13 +19,15 @@ typedef   float         f32;
 typedef   double        f64;
 
 typedef enum: u8 { WHITE, BLACK } PieceColor;
-typedef enum: u8 { EMPTY, PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING } PiecesType;
+typedef enum: u8 { PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING } PiecesType;
+
 typedef struct {
     PieceColor color: 1;
     PiecesType type : 3;
-} Piece;
+    bool is_empty: 1;  // default value is 0, so false
+} Cell;
 
-typedef Piece ChessBoard[8][8];
+typedef Cell ChessBoard[8][8];
 
 typedef struct {
     u8 col;

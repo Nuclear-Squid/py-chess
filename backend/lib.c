@@ -5,10 +5,10 @@
 static ChessBoard main_chess_board = {
     { {BLACK, ROOK}, {BLACK, KNIGHT}, {BLACK, BISHOP}, {BLACK, QWEEN}, {BLACK, KING}, {BLACK, BISHOP}, {BLACK, KNIGHT}, {BLACK, ROOK} },
     { {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN}, {BLACK, PAWN} },
-    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
-    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
-    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
-    { {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY}, {BLACK, EMPTY} },
+    { {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true} },
+    { {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true} },
+    { {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true} },
+    { {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true}, {.is_empty = true} },
     { {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN}, {WHITE, PAWN} },
     { {WHITE, ROOK}, {WHITE, KNIGHT}, {WHITE, BISHOP}, {WHITE, QWEEN}, {WHITE, KING}, {WHITE, BISHOP}, {WHITE, KNIGHT}, {WHITE, ROOK} },
 };
@@ -42,18 +42,18 @@ static inline bool eq_positions(Position pos_a, Position pos_b) {
     return pos_a.col == pos_b.col && pos_a.row == pos_b.row;
 }
 
-Piece get_piece_at(ChessBoard board, Position pos) {
+Cell get_piece_at(ChessBoard board, Position pos) {
     return board[pos.row][pos.col];
 }
 
-void set_piece_at(ChessBoard board, Position pos, Piece piece) {
+void set_piece_at(ChessBoard board, Position pos, Cell piece) {
     board[pos.row][pos.col] = piece;
 }
 
 static inline CellState get_cell_state(ChessBoard board, Position cell_pos, PieceColor piece_color) {
     if (cell_pos.col >= 8 || cell_pos.row >= 8) return OUT_OF_BOUNDS;
-    const Piece other_piece = get_piece_at(board, cell_pos);
-    if (other_piece.type == EMPTY) return FREE;
+    const Cell other_piece = get_piece_at(board, cell_pos);
+    if (other_piece.is_empty) return FREE;
     return other_piece.color == piece_color ? SAME_COLOR : OTHER_COLOR;
 }
 
@@ -89,7 +89,9 @@ static size_t get_move_if_valid(ChessBoard board, Position pos, Direction dir, P
 }
 
 size_t get_possible_moves(ChessBoard board, Position pos, Position* output) {
-    const Piece piece = get_piece_at(board, pos);
+    const Cell piece = get_piece_at(board, pos);
+    if (piece.is_empty) return 0;
+
     Direction pawn_direction = piece.color == WHITE
         ? (Direction) { .row = -1, .col =  0 }
         : (Direction) { .row =  1, .col =  0 };
@@ -97,7 +99,6 @@ size_t get_possible_moves(ChessBoard board, Position pos, Position* output) {
     size_t nb_moves = 0;
 
     switch (piece.type) {
-        case EMPTY: break;
         case PAWN:
             output[nb_moves++] = add_positions(pos, pawn_direction);
             if (pos.row == 1 || pos.row == 6)
@@ -169,9 +170,9 @@ static bool has_moves_available(ChessBoard board, PieceColor color) {
     for (size_t row = 0; row < 8; row++) {
         for (size_t col = 0; col < 8; col++) {
             const Position piece_position = { col, row };
-            const Piece current_piece = get_piece_at(board, piece_position);
+            const Cell current_piece = get_piece_at(board, piece_position);
 
-            if (current_piece.type == EMPTY || current_piece.color != color) continue;
+            if (current_piece.is_empty || current_piece.color != color) continue;
 
             Position moves_buffer[24];
             if (get_possible_moves(board, piece_position, moves_buffer) > 0)
@@ -184,10 +185,10 @@ static bool has_moves_available(ChessBoard board, PieceColor color) {
 
 KingStatus check_check(ChessBoard board, Position start, Position end) {
     // Apply move, but save the replaced piece
-    const Piece moved_piece = get_piece_at(board, start);
-    const Piece replaced_piece = get_piece_at(board, end);
+    const Cell moved_piece = get_piece_at(board, start);
+    const Cell replaced_piece = get_piece_at(board, end);
     set_piece_at(board, end, moved_piece);
-    set_piece_at(board, start, (Piece) { WHITE, EMPTY });
+    set_piece_at(board, start, (Cell) { .is_empty = true });
 
     // Store return value and use goto due to needed cleanup.
     KingStatus rv = NO_CHECKS;
@@ -198,7 +199,7 @@ KingStatus check_check(ChessBoard board, Position start, Position end) {
     for (size_t row = 0; row < 8; row++) {
         for (size_t col = 0; col < 8; col++) {
             const Position piece_position = { col, row };
-            const Piece current_piece = get_piece_at(board, piece_position);
+            const Cell current_piece = get_piece_at(board, piece_position);
 
             if (current_piece.type == KING && current_piece.color == enemy_king_color) {
                 king_position = piece_position;
@@ -212,9 +213,9 @@ KingStatus check_check(ChessBoard board, Position start, Position end) {
     for (size_t row = 0; row < 8; row++) {
         for (size_t col = 0; col < 8; col++) {
             const Position piece_position = { col, row };
-            const Piece current_piece = get_piece_at(board, piece_position);
+            const Cell current_piece = get_piece_at(board, piece_position);
 
-            if (current_piece.type == EMPTY || current_piece.color == color_to_play)
+            if (current_piece.is_empty || current_piece.color == color_to_play)
                 continue;
 
             Position move_buffer[24];
@@ -265,7 +266,7 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
 
     if (!self_check) {
         set_piece_at(board, end, get_piece_at(board, start));
-        set_piece_at(board, start, (Piece) { WHITE, EMPTY });
+        set_piece_at(board, start, (Cell) { .is_empty = true });
         color_to_play = color_to_play == WHITE ? BLACK : WHITE;
     }
 
@@ -282,15 +283,14 @@ void debug_log_chess_board(ChessBoard board) {
         printf("%c", row < 2 ? '|' : ' ');
 
         for (size_t col = 0; col < 8; col++) {
-            Piece current_piece = get_piece_at(board, (Position) { col, row });
-            if (current_piece.type == EMPTY) {
+            Cell current_piece = get_piece_at(board, (Position) { col, row });
+            if (current_piece.is_empty) {
                 printf(" --");
                 continue;
             }
 
             printf(" %c", current_piece.color == WHITE ? 'w' : 'b');
             switch (current_piece.type) {
-                case EMPTY: break;  // already handled in the code above
                 case PAWN:   printf("p"); break;
                 case ROOK:   printf("r"); break;
                 case KNIGHT: printf("h"); break;  // 'h' for "horse"

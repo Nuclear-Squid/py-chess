@@ -8,47 +8,45 @@ from typing import Optional
 class PieceColor(Enum):
     WHITE, BLACK = range(2)
 
-    @classmethod
-    def from_param(cls, obj):
-        return obj
-
     def __str__(self):
         match self:
             case PieceColor.WHITE: return "white"
             case PieceColor.BLACK: return "black"
-            case other: raise ValueError(f"Unknown color {other}")
+            case _: raise ValueError(f"Unknown color")
 
     def __repr__(self):
         return self.__str__()
 
 class PieceType(Enum):
-    EMPTY, PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING = range(7)
+    PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING = range(6)
 
     def __str__(self):
         match self:
-            case PieceType.EMPTY:  return "empty"
             case PieceType.PAWN:   return "pawn"
             case PieceType.ROOK:   return "rook"
             case PieceType.KNIGHT: return "knight"
             case PieceType.BISHOP: return "bishop"
             case PieceType.QWEEN:  return "qween"
             case PieceType.KING:   return "king"
-            case other: raise ValueError(f"Unknown piece type {other}")
+            case _: raise ValueError(f"Unknown piece type")
 
     def __repr__(self):
         return self.__str__()
 
-class Piece(ctypes.Structure):
-    _fields_ = [("color", ctypes.c_uint8, 1), ("type", ctypes.c_uint8, 3)]
+class Cell(ctypes.Structure):
+    _fields_ = [("color", ctypes.c_uint8, 1), ("type", ctypes.c_uint8, 3), ("is_empty", ctypes.c_bool)]
 
     def __str__(self):
-        return f"{PieceColor(self.color)}-{PieceType(self.type)}"
+        if self.is_empty:
+            return "empty-cell"
+        else:
+            return f"{PieceColor(self.color)}-{PieceType(self.type)}"
 
     def __repr__(self):
         return self.__str__()
 
     def __eq__(self, other):
-        return self.color == other.color and self.type == other.type
+        return self.is_empty == other.is_empty or (self.color == other.color and self.type == other.type)
 
 class Position(ctypes.Structure):
     _fields_ = [("col", ctypes.c_uint8), ("row", ctypes.c_uint8)]
@@ -61,6 +59,19 @@ class Position(ctypes.Structure):
 
     def __eq__(self, other):
         return self.col == other.col and self.row == other.row
+
+
+class ChessBoard((Cell * 8) * 8):
+    def get_piece_at(self, pos: Position):
+        return LIBCHESS.get_piece_at(self, pos)
+
+    def log(self):
+        LIBCHESS.debug_log_chess_board(self)
+
+    def get_possible_moves(self, position):
+        moves_buffer = (Position * 24)()
+        nb_moves = LIBCHESS.get_possible_moves(self, position, moves_buffer)
+        return moves_buffer[:nb_moves]
 
 
 class KingStatus(Enum):
@@ -98,10 +109,10 @@ class PlayedMoveStatus(ctypes.Structure):
 
 
 LIBCHESS = ctypes.CDLL("zig-out/lib/libchess.so")
-LIBCHESS.get_main_chess_board.restype = ctypes.POINTER((Piece * 8) * 8)
+LIBCHESS.get_main_chess_board.restype = ctypes.POINTER(ChessBoard)
 LIBCHESS.get_possible_moves.restype = ctypes.c_size_t
 LIBCHESS.get_color_to_play.restype = PieceColor
-LIBCHESS.get_piece_at.restype = Piece
+LIBCHESS.get_piece_at.restype = Cell
 LIBCHESS.try_play_move.restype = PlayedMoveStatus
 
 class ChessBoardWidget(tk.Canvas):
@@ -120,20 +131,19 @@ class ChessBoardWidget(tk.Canvas):
         def on_click(event):
             board = LIBCHESS.get_main_chess_board().contents
             clicked_cell = Position(event.x // self.cell_size, event.y // self.cell_size)
-            piece_on_cell = LIBCHESS.get_piece_at(board, clicked_cell)
+            piece_on_cell = board.get_piece_at(clicked_cell)
             color_to_play = LIBCHESS.get_color_to_play()
 
             if self.selected_cell is None or clicked_cell not in self.possible_moves:
-                if piece_on_cell.color != color_to_play:
+                if piece_on_cell.color != color_to_play.value:
                     return
-                moves_buffer = (Position * 24)()
-                nb_moves = LIBCHESS.get_possible_moves(board, clicked_cell, moves_buffer)
-                self.possible_moves = moves_buffer[nb_moves:]
+                self.possible_moves = board.get_possible_moves(clicked_cell)
                 self.selected_cell = clicked_cell
                 return
 
             # TODO: Check the status and render it appropriately
             LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
+            board.log()
 
         self.bind("<Button-1>", on_click)
 
