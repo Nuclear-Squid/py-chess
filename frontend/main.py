@@ -3,6 +3,7 @@ import ctypes
 import tkinter as tk
 
 from enum import Enum
+from typing import Optional
 
 class PieceColor(Enum):
     WHITE, BLACK = range(2)
@@ -61,11 +62,47 @@ class Position(ctypes.Structure):
     def __eq__(self, other):
         return self.col == other.col and self.row == other.row
 
+
+class KingStatus(Enum):
+    NO_CHECKS, WHITE_IN_CHECK, BLACK_IN_CHECK, WHITE_CHECK_MATE, BLACK_CHECK_MATE = range(5)
+
+    def __str__(self):
+        match self:
+            case KingStatus.NO_CHECKS:        return "No checks"
+            case KingStatus.WHITE_IN_CHECK:   return "White in check"
+            case KingStatus.BLACK_IN_CHECK:   return "Black in check"
+            case KingStatus.WHITE_CHECK_MATE: return "Black won"
+            case KingStatus.BLACK_CHECK_MATE: return "White won"
+            case _: raise ValueError("Unknown KingStatus")
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+
+class PlayedMoveStatus(ctypes.Structure):
+    _fields_ = [
+        ("was_valid", ctypes.c_bool),
+        ("king_status", ctypes.c_uint8),
+    ]
+
+    def __str__(self):
+        valid = "Valid" if self.was_valid else "Not valid"
+        return f"({valid} move, {self.king_status})"
+
+    def __eq__(self, other):
+        return self.was_valid == other.was_valid and \
+                self.king_status == other.king_status
+
+
 LIBCHESS = ctypes.CDLL("zig-out/lib/libchess.so")
 LIBCHESS.get_main_chess_board.restype = ctypes.POINTER((Piece * 8) * 8)
 LIBCHESS.get_possible_moves.restype = ctypes.c_size_t
 LIBCHESS.get_color_to_play.restype = PieceColor
 LIBCHESS.get_piece_at.restype = Piece
+LIBCHESS.try_play_move.restype = PlayedMoveStatus
 
 class ChessBoardWidget(tk.Canvas):
     LIGHT_COLOR = "#cccccc"
@@ -74,29 +111,31 @@ class ChessBoardWidget(tk.Canvas):
     def __init__(self, parent, size):
         super().__init__(parent, width=size, height=size)
 
-        self.cell_size = size // 8
-        self.moves_buffer = []
-        self.selected_cell = None
+        self.cell_size: int = size // 8
+        self.possible_moves: list[Position] = []
+        self.selected_cell: Optional[Position] = None
 
         # TODO: Render the pieces on the board
 
-        def clicked_cell(event):
+        def on_click(event):
             board = LIBCHESS.get_main_chess_board().contents
-            cell_clicked = Position(event.x // self.cell_size, event.y // self.cell_size)
+            clicked_cell = Position(event.x // self.cell_size, event.y // self.cell_size)
+            piece_on_cell = LIBCHESS.get_piece_at(board, clicked_cell)
             color_to_play = LIBCHESS.get_color_to_play()
 
-            if cell_clicked in self.moves_buffer:
-                LIBCHESS.play_move(board, self.selected_cell, cell_clicked)
+            if self.selected_cell is None or clicked_cell not in self.possible_moves:
+                if piece_on_cell.color != color_to_play:
+                    return
+                moves_buffer = (Position * 24)()
+                nb_moves = LIBCHESS.get_possible_moves(board, clicked_cell, moves_buffer)
+                self.possible_moves = moves_buffer[nb_moves:]
+                self.selected_cell = clicked_cell
                 return
 
-            if LIBCHESS.get_piece_at(board, cell_clicked).color == color_to_play.value:
-                self.selected_cell = cell_clicked
-                self.moves_buffer = (Position * 24)()
-                nb_moves = LIBCHESS.get_possible_moves(board, cell_clicked, self.moves_buffer)
-                self.moves_buffer = self.moves_buffer[:nb_moves]
-                return
+            # TODO: Check the status and render it appropriately
+            LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
 
-        self.bind("<Button-1>", clicked_cell)
+        self.bind("<Button-1>", on_click)
 
         for col in range(8):
             for row in range(8):

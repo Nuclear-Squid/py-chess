@@ -15,6 +15,8 @@ static ChessBoard main_chess_board = {
 
 static PieceColor color_to_play = WHITE;
 
+static KingStatus king_status = NO_CHECKS;
+
 ChessBoard* get_main_chess_board() { return &main_chess_board; }
 PieceColor get_color_to_play() { return color_to_play; }
 
@@ -36,8 +38,16 @@ static inline Position mul_position(Position pos, i8 multiplier) {
     };
 }
 
+static inline bool eq_positions(Position pos_a, Position pos_b) {
+    return pos_a.col == pos_b.col && pos_a.row == pos_b.row;
+}
+
 Piece get_piece_at(ChessBoard board, Position pos) {
     return board[pos.row][pos.col];
+}
+
+void set_piece_at(ChessBoard board, Position pos, Piece piece) {
+    board[pos.row][pos.col] = piece;
 }
 
 static inline CellState get_cell_state(ChessBoard board, Position cell_pos, PieceColor piece_color) {
@@ -155,10 +165,114 @@ size_t get_possible_moves(ChessBoard board, Position pos, Position* output) {
     return nb_moves;
 }
 
-void play_move(ChessBoard board, Position start, Position end) {
-    board[end.row][end.col] = board[start.row][start.col];
-    board[start.row][start.col].type = EMPTY;
-    color_to_play = color_to_play == WHITE ? BLACK : WHITE;
+static bool has_moves_available(ChessBoard board, PieceColor color) {
+    for (size_t row = 0; row < 8; row++) {
+        for (size_t col = 0; col < 8; col++) {
+            const Position piece_position = { col, row };
+            const Piece current_piece = get_piece_at(board, piece_position);
+
+            if (current_piece.type == EMPTY || current_piece.color != color) continue;
+
+            Position moves_buffer[24];
+            if (get_possible_moves(board, piece_position, moves_buffer) > 0)
+                return true;
+        }
+    }
+
+    return false;
+}
+
+KingStatus check_check(ChessBoard board, Position start, Position end) {
+    // Apply move, but save the replaced piece
+    const Piece moved_piece = get_piece_at(board, start);
+    const Piece replaced_piece = get_piece_at(board, end);
+    set_piece_at(board, end, moved_piece);
+    set_piece_at(board, start, (Piece) { WHITE, EMPTY });
+
+    // Store return value and use goto due to needed cleanup.
+    KingStatus rv = NO_CHECKS;
+
+    Position king_position;
+    const PieceColor enemy_king_color = color_to_play == WHITE ? BLACK : WHITE;
+
+    for (size_t row = 0; row < 8; row++) {
+        for (size_t col = 0; col < 8; col++) {
+            const Position piece_position = { col, row };
+            const Piece current_piece = get_piece_at(board, piece_position);
+
+            if (current_piece.type == KING && current_piece.color == enemy_king_color) {
+                king_position = piece_position;
+                goto found_king;
+            }
+        }
+    }
+
+    found_king:
+
+    for (size_t row = 0; row < 8; row++) {
+        for (size_t col = 0; col < 8; col++) {
+            const Position piece_position = { col, row };
+            const Piece current_piece = get_piece_at(board, piece_position);
+
+            if (current_piece.type == EMPTY || current_piece.color == color_to_play)
+                continue;
+
+            Position move_buffer[24];
+            const size_t nb_moves = get_possible_moves(board, piece_position, move_buffer);
+
+            for (size_t i = 0; i < nb_moves; i++) {
+                if (eq_positions(move_buffer[i], king_position)) {
+                    if (has_moves_available(board, enemy_king_color)) {
+                        rv = color_to_play == WHITE
+                            ? BLACK_IN_CHECK
+                            : WHITE_IN_CHECK;
+                    }
+                    else {
+                        rv = color_to_play == WHITE
+                            ? BLACK_CHECK_MATE
+                            : WHITE_CHECK_MATE;
+                    }
+                    goto cleanup;
+                }
+            }
+        }
+    }
+
+    cleanup:
+    set_piece_at(board, end, replaced_piece);
+    set_piece_at(board, start, moved_piece);
+    return rv;
+}
+
+// Returns true if the status refers to the same player as the color.
+static bool color_eq_king_status(PieceColor color, KingStatus status) {
+    if (status == NO_CHECKS) return false;
+    switch (color) {
+        case WHITE: return status == WHITE_IN_CHECK || status == WHITE_CHECK_MATE;
+        case BLACK: return status == BLACK_IN_CHECK || status == BLACK_CHECK_MATE;
+    }
+}
+
+typedef struct {
+    bool was_valid;
+    KingStatus king_status;
+} PlayedMoveStatus;
+
+// NOTE: currently assumes the move is legal, but checks if it leads to a self-check
+PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
+    KingStatus checks = check_check(board, start, end);
+    bool self_check = color_eq_king_status(color_to_play, checks);
+
+    if (!self_check) {
+        set_piece_at(board, end, get_piece_at(board, start));
+        set_piece_at(board, start, (Piece) { WHITE, EMPTY });
+        color_to_play = color_to_play == WHITE ? BLACK : WHITE;
+    }
+
+    return (PlayedMoveStatus) {
+        .king_status = checks,
+        .was_valid = !self_check,
+    };
 }
 
 void debug_log_chess_board(ChessBoard board) {
@@ -186,8 +300,8 @@ void debug_log_chess_board(ChessBoard board) {
             }
         }
 
-        printf("%c\n", row >= 6 ? '|' : ' ');
+        printf(" %c\n", row >= 6 ? '|' : ' ');
     }
 
-    printf("                     ----+\n");
+    printf("                      ----+\n");
 }

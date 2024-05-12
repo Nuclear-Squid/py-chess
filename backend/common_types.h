@@ -34,3 +34,11 @@ typedef struct {
 typedef Position Direction;
 
 typedef enum: u8 { OUT_OF_BOUNDS, FREE, SAME_COLOR, OTHER_COLOR } CellState;
+
+typedef enum {
+    NO_CHECKS,
+    WHITE_IN_CHECK,
+    BLACK_IN_CHECK,
+    WHITE_CHECK_MATE,
+    BLACK_CHECK_MATE
+} KingStatus;
