@@ -1,18 +1,15 @@
-{ pkgs ? import <nixpkgs> {} }:
 let
-    unstable = import <nixos-unstable> {};
-    python-derivation = pkgs.python3.withPackages (py-pkgs: with py-pkgs; [
-        tkinter # GUI library
-    ]);
+  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-23.11";
+  pkgs = import nixpkgs { config = {}; overlays = []; };
 in
 pkgs.mkShell {
     packages = with pkgs; [
-        unstable.zig # Using zig as a build system
-        python-derivation
+        clang
+        (pkgs.python3.withPackages (py-pkgs: with py-pkgs; [
+            tkinter # GUI library
+        ]))
         valgrind
+        git
+        gnumake
     ];
-
-    shellHook = ''
-        export CPYTHON_HEADER_PATH="${python-derivation}/include/python3.11"
-    '';
 }
