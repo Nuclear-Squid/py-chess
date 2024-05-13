@@ -108,7 +108,7 @@ class PlayedMoveStatus(ctypes.Structure):
                 self.king_status == other.king_status
 
 
-LIBCHESS = ctypes.CDLL("zig-out/lib/libchess.so")
+LIBCHESS = ctypes.CDLL(".build/libchess.so")
 LIBCHESS.get_main_chess_board.restype = ctypes.POINTER(ChessBoard)
 LIBCHESS.get_possible_moves.restype = ctypes.c_size_t
 LIBCHESS.get_color_to_play.restype = PieceColor
