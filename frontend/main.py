@@ -143,6 +143,7 @@ class ChessBoardWidget(tk.Canvas):
 
             # TODO: Check the status and render it appropriately
             LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
+            self.selected_cell = None
             board.log()
 
         self.bind("<Button-1>", on_click)
