@@ -27,6 +27,8 @@ typedef struct {
     bool is_empty: 1;  // default value is 0, so false
 } Cell;
 
+#define EMPTY_CELL ((Cell) { .is_empty = true })
+
 typedef Cell ChessBoard[8][8];
 
 typedef struct {
@@ -37,10 +39,4 @@ typedef Position Direction;
 
 typedef enum: u8 { OUT_OF_BOUNDS, FREE, SAME_COLOR, OTHER_COLOR } CellState;
 
-typedef enum {
-    NO_CHECKS,
-    WHITE_IN_CHECK,
-    BLACK_IN_CHECK,
-    WHITE_CHECK_MATE,
-    BLACK_CHECK_MATE
-} KingStatus;
+typedef enum { NO_CHECKS, CHECK, CHECK_MATE } KingStatus;
