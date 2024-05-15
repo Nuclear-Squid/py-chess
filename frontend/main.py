@@ -155,13 +155,41 @@ class ChessBoardWidget(tk.Canvas):
                 color = self.LIGHT_COLOR if (col + row) % 2 == 0 else self.DARK_COLOR
                 self.create_rectangle(start_corner, end_corner, fill=color, outline=color)
 
+    def show_draw(self):
+        print("stalemate")
+        self.create_text((200,200), text="stalemate", fill="red", font="Arial 30 bold")
+        return
+        
+    def show_win(self, color):
+      if (color==PieceColor.WHITE):
+     	  	 print("White wins by checkmate")
+     	  	 self.create_text((200,200), text="White wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
+      else:
+       		 print("Black wins by checkmate")
+       		 self.create_text((200,200), text="Black wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
+      return
+      
+    def resign(self, color):
+      if (color==PieceColor.WHITE):
+     	  	 print("White resigned. Black wins")
+     	  	 self.create_text((200,200), text="White resigned\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
+      else:
+       		 print("Black resigned. White wins")
+       		 self.create_text((200,200), text="Black resigned\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
+      return	
+        
+
 
 def main():
     root = tk.Tk()
     root.title("py-chess")
 
-    ChessBoardWidget(root, 400).pack(anchor=tk.CENTER, expand=True)
-
+    board = ChessBoardWidget(root, 400)
+    board.pack(anchor=tk.CENTER, expand=True)
+    tk.Button(root, text="resign", command=lambda: board.resign(PieceColor.WHITE)).pack()
+    tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
+    tk.Button(root, text="draw", command=lambda: board.show_draw()).pack()
+    
     root.mainloop()
 
 if __name__ == "__main__":
