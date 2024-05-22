@@ -32,10 +32,22 @@ typedef struct {
 typedef Cell ChessBoard[8][8];
 
 typedef struct {
-    u8 col;
-    u8 row;
+    i8 col;
+    i8 row;
 } Position;
 typedef Position Direction;
+
+const Direction DIR_N = { .col =  0, .row = -1 };
+const Direction DIR_S = { .col =  0, .row =  1 };
+const Direction DIR_E = { .col =  1, .row =  0 };
+const Direction DIR_W = { .col = -1, .row =  0 };
+
+const Direction DIR_NE = { .col =  1, .row = -1 };
+const Direction DIR_NW = { .col = -1, .row = -1 };
+const Direction DIR_SE = { .col =  1, .row =  1 };
+const Direction DIR_SW = { .col = -1, .row =  1 };
+
+
 
 typedef enum: u8 { OUT_OF_BOUNDS, FREE, SAME_COLOR, OTHER_COLOR } CellState;
 

@@ -16,7 +16,7 @@ class PieceColor(Enum):
 
     def __repr__(self):
         return self.__str__()
-        
+
 
 class PieceType(Enum):
     PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING = range(6)
@@ -48,7 +48,7 @@ class Cell(ctypes.Structure):
 
     def __eq__(self, other):
         return self.is_empty == other.is_empty or (self.color == other.color and self.type == other.type)
-        
+
     def __hash__(self):
         return hash((self.color, self.type, self.is_empty))
 
@@ -148,7 +148,7 @@ class ChessBoardWidget(tk.Canvas):
                 self.selected_cell = clicked_cell
                 self.render()
                 return
-            
+
 
             # TODO: Check the status and render it appropriately
             LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
@@ -173,7 +173,6 @@ class ChessBoardWidget(tk.Canvas):
             for row in range(8):
                 current_cell = Position(row,col)
                 piece_on_cell = board.get_piece_at(current_cell)
-                print(current_cell, piece_on_cell.is_empty, piece_on_cell)
                 if (not piece_on_cell.is_empty) :
                     pos_y = row *self.cell_size + self.cell_size / 2
                     pos_x= col *self.cell_size + self.cell_size /2
@@ -182,14 +181,14 @@ class ChessBoardWidget(tk.Canvas):
             taille=40
             start_corner=(case.col * self.cell_size+taille,case.row * self.cell_size+taille)
             end_corner=((case.col+1) * self.cell_size-taille,(case.row+1) * self.cell_size-taille)
-            self.create_oval(start_corner,end_corner,fill='grey',outline='grey')                   
-      
+            self.create_oval(start_corner,end_corner,fill='grey',outline='grey')
+
 
     def show_draw(self):
         print("stalemate")
         self.create_text((200,200), text="stalemate", fill="red", font="Arial 30 bold")
         return
-        
+
     def show_win(self, color):
       if (color==PieceColor.WHITE):
      	  	 print("White wins by checkmate")
@@ -198,7 +197,7 @@ class ChessBoardWidget(tk.Canvas):
        		 print("Black wins by checkmate")
        		 self.create_text((200,200), text="Black wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
       return
-      
+
     def resign(self, color):
       if (color==PieceColor.WHITE):
      	  	 print("White resigned. Black wins")
@@ -206,14 +205,14 @@ class ChessBoardWidget(tk.Canvas):
       else:
        		 print("Black resigned. White wins")
        		 self.create_text((200,200), text="Black resigned\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
-      return	
-        
+      return
+
 
 
 def main():
     root = tk.Tk()
     root.title("py-chess")
-    
+
     Dpieces= {
         Cell(PieceColor.BLACK.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pion.png").subsample(10, 10),
         Cell(PieceColor.WHITE.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pion_blanc.png").subsample(10, 10),
@@ -234,7 +233,7 @@ def main():
     tk.Button(root, text="resign", command=lambda: board.resign(PieceColor.WHITE)).pack()
     tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
     tk.Button(root, text="draw", command=lambda: board.show_draw()).pack()
-    
+
     root.mainloop()
 
 if __name__ == "__main__":
