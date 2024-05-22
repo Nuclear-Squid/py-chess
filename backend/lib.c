@@ -18,6 +18,12 @@ static PieceColor color_to_play = WHITE;
 
 static KingStatus king_status = NO_CHECKS;
 
+static struct {
+    Cell moved_piece;
+    Position start_position;
+    Position end_position;
+} last_move;
+
 ChessBoard* get_main_chess_board() { return &main_chess_board; }
 PieceColor get_color_to_play() { return color_to_play; }
 
@@ -29,6 +35,13 @@ static inline Position add_positions(Position pos_a, Position pos_b) {
     return (Position) {
         .col = pos_a.col + pos_b.col,
         .row = pos_a.row + pos_b.row,
+    };
+}
+
+static inline Position add_positions3(Position pos_a, Position pos_b, Position pos_c) {
+    return (Position) {
+        .col = pos_a.col + pos_b.col + pos_c.col,
+        .row = pos_a.row + pos_b.row + pos_c.row,
     };
 }
 
@@ -60,6 +73,7 @@ void set_piece_at(ChessBoard board, Position pos, Cell piece) {
 
 static inline CellState get_cell_state(ChessBoard board, Position cell_pos, PieceColor piece_color) {
     if (cell_pos.col >= 8 || cell_pos.row >= 8) return OUT_OF_BOUNDS;
+    if (cell_pos.col < 0  || cell_pos.row < 0)  return OUT_OF_BOUNDS;
     const Cell other_piece = get_piece_at(board, cell_pos);
     if (other_piece.is_empty) return FREE;
     return other_piece.color == piece_color ? SAME_COLOR : OTHER_COLOR;
@@ -96,36 +110,87 @@ static size_t get_move_if_valid(ChessBoard board, Position pos, Direction dir, P
     }
 }
 
-static size_t get_possible_moves_pawn(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
-    Direction pawn_direction = piece_color == WHITE
-        ? (Direction) { .row = -1, .col =  0 }
-        : (Direction) { .row =  1, .col =  0 };
-
+static size_t get_pawn_moves_line(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
+    Direction pawn_direction = piece_color == WHITE ? DIR_N : DIR_S;
     size_t nb_moves = 0;
 
-    output[nb_moves++] = add_positions(pos, pawn_direction);
-    if (pos.row == 1 || pos.row == 6)
-        output[nb_moves++] = add_positions(pos, mul_position(pawn_direction, 2));
-
-    pawn_direction.col = 1;
     Position aimed_cell = add_positions(pos, pawn_direction);
-    if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR)
-        output[nb_moves++] = aimed_cell;
+    if (get_cell_state(board, aimed_cell, piece_color) != FREE) return 0;
+    output[nb_moves++] = aimed_cell;
 
-    pawn_direction.col = -1;
-    aimed_cell = add_positions(pos, pawn_direction);
-    if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR)
-        output[nb_moves++] = aimed_cell;
+    if (pos.row == 1 || pos.row == 6) {
+        aimed_cell = add_positions(aimed_cell, pawn_direction);
+        if (get_cell_state(board, aimed_cell, piece_color) == FREE) {
+            output[nb_moves++] = aimed_cell;
+        }
+    }
 
     return nb_moves;
 }
 
+static size_t get_pawn_diagonal_if_valid(ChessBoard board, Position pos, Position* output, PieceColor piece_color, Direction horizontal) {
+    Direction pawn_direction = piece_color == WHITE ? DIR_N : DIR_S;
+    Position aimed_cell = add_positions3(pos, pawn_direction, horizontal);
+    log_position(aimed_cell);
+
+    if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR) {
+        *output = aimed_cell;
+        return 1;
+    }
+
+    // En passant
+    if (last_move.moved_piece.type != PAWN) return 0;
+    if (abs(last_move.end_position.row - last_move.start_position.row) != 2) return 0;
+
+    if (eq_positions(last_move.end_position, add_positions(pos, horizontal))) {
+        *output = aimed_cell;
+        return 1;
+    }
+    return 0;
+}
+
+static size_t get_possible_moves_pawn(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
+    size_t nb_moves = get_pawn_moves_line(board, pos, output, piece_color);
+    nb_moves += get_pawn_diagonal_if_valid(board, pos, output + nb_moves, piece_color, DIR_W);
+    nb_moves += get_pawn_diagonal_if_valid(board, pos, output + nb_moves, piece_color, DIR_E);
+    return nb_moves;
+}
+
+// static bool is_en_passant_possible(ChessBoard board, Position pos, PieceColor piece_color, Direction neighbour) {
+//     if (last_move.moved_piece.type != PAWN) return false;
+//     if (abs(last_move.end_position.row - last_move.start_position.row) != 2)
+//         return false;
+//
+//     return eq_positions(add_positions(neighbour, pos), last_move.end_position);
+// }
+//
+// static size_t get_possible_moves_pawn(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
+//     Direction pawn_direction = piece_color == WHITE ? DIR_W : DIR_E;
+//     size_t nb_moves = 0;
+//
+//     output[nb_moves++] = add_positions(pos, pawn_direction);
+//     if (pos.row == 1 || pos.row == 6)
+//         output[nb_moves++] = add_positions(pos, mul_position(pawn_direction, 2));
+//
+//     pawn_direction.col = 1;
+//     Position aimed_cell = add_positions(pos, pawn_direction);
+//     if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR || is_en_passant_possible(board, aimed_cell, piece_color, DIR_E))
+//         output[nb_moves++] = aimed_cell;
+//
+//     pawn_direction.col = -1;
+//     aimed_cell = add_positions(pos, pawn_direction);
+//     if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR || is_en_passant_possible(board, aimed_cell, piece_color, DIR_W))
+//         output[nb_moves++] = aimed_cell;
+//
+//     return nb_moves;
+// }
+
 static size_t get_possible_moves_rook(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
     size_t nb_moves = 0;
-    nb_moves += get_moves_line(board, pos, (Direction) { .row = -1, .col =  0 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  1, .col =  0 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  0, .col = -1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  0, .col =  1 }, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_E, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_N, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
     return nb_moves;
 }
 
@@ -145,36 +210,36 @@ static size_t get_possible_moves_knight(ChessBoard board, Position pos, Position
 
 static size_t get_possible_moves_bishop(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
     size_t nb_moves = 0;
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  1, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  1, .col = -1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row = -1, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row = -1, .col = -1 }, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_SE, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_SW, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_NE, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_NW, piece_color, output + nb_moves);
     return nb_moves;
 }
 
 static size_t get_possible_moves_qween(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
     size_t nb_moves = 0;
-    nb_moves += get_moves_line(board, pos, (Direction) { .row = -1, .col =  0 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  1, .col =  0 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  0, .col = -1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  0, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  1, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row =  1, .col = -1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row = -1, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, (Direction) { .row = -1, .col = -1 }, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_E, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_N, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_SE, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_SW, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_NE, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_NW, piece_color, output + nb_moves);
     return nb_moves;
 }
 
 static size_t get_possible_moves_king(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
     size_t nb_moves = 0;
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row = -1, .col =  0 }, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row =  1, .col =  0 }, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row =  0, .col = -1 }, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row =  0, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row =  1, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row =  1, .col = -1 }, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row = -1, .col =  1 }, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, (Direction) { .row = -1, .col = -1 }, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_E, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_N, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_SE, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_SW, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_NE, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_NW, piece_color, output + nb_moves);
     return nb_moves;
 }
 
@@ -289,6 +354,20 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
 
     PieceColor enemy_color = get_opposite_color(color_to_play);
     bool enemy_king_in_check = is_in_check(board, enemy_color);
+
+    // En passant
+    if (last_move.moved_piece.type == PAWN &&
+        abs(last_move.start_position.row - last_move.end_position.row) == 2 &&
+        last_move.start_position.col == end.col &&
+        (last_move.start_position.row + last_move.end_position.row) / 2 == end.row
+    ) {
+        set_piece_at(board, last_move.end_position, EMPTY_CELL);
+    }
+
+    last_move.moved_piece = moved_piece;
+    last_move.start_position = start;
+    last_move.end_position = end;
+
     if (enemy_king_in_check)
         return has_moves_available(board, enemy_color)
             ? (PlayedMoveStatus) { false, CHECK }
