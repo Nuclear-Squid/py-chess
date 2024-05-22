@@ -1,6 +1,8 @@
 #!/bin/env python3
 import ctypes
 import tkinter as tk
+import time
+import threading
 
 from enum import Enum
 from typing import Optional
@@ -119,6 +121,20 @@ LIBCHESS.get_color_to_play.restype = PieceColor
 LIBCHESS.get_piece_at.restype = Cell
 LIBCHESS.try_play_move.restype = PlayedMoveStatus
 
+
+def chrono(duree1,duree2,texte_timer1,texte_timer2):
+    texte_timer1['text']= str(duree1) + "s"
+    texte_timer2['text']= str(duree2) + "s"
+    if duree1!=0 and duree2!=0 :
+        if LIBCHESS.get_color_to_play() == PieceColor.WHITE:
+            threading.Timer(1.0,chrono,[duree1,duree2-1,texte_timer1,texte_timer2]).start()
+        else:
+            threading.Timer(1.0,chrono,[duree1-1,duree2,texte_timer1,texte_timer2]).start()
+    else :
+        texte_timer1['text']= "termine"
+        texte_timer2['text']= "termine"
+
+
 class ChessBoardWidget(tk.Canvas):
     LIGHT_COLOR = "#5B3C11"
     DARK_COLOR = "#C8AD7F"
@@ -227,12 +243,19 @@ def main():
         Cell(PieceColor.BLACK.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reinen.png").subsample(6, 6),
         Cell(PieceColor.WHITE.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reineb.png").subsample(6, 6)
     }
-
-    board = ChessBoardWidget(root, 400, Dpieces)
+    texte_timer1 = tk.Label(root,text="")
+    texte_timer1.pack()
+    board = ChessBoardWidget(root, 700, Dpieces)
     board.pack(anchor=tk.CENTER, expand=True)
+    texte_timer2 = tk.Label(root,text="")
+    texte_timer2.pack()
     tk.Button(root, text="resign", command=lambda: board.resign(PieceColor.WHITE)).pack()
     tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
     tk.Button(root, text="draw", command=lambda: board.show_draw()).pack()
+
+    duree1=60
+    duree2=60
+    chrono(duree1,duree2,texte_timer1,texte_timer2)
 
     root.mainloop()
 
