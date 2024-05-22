@@ -2,7 +2,6 @@
 import ctypes
 import tkinter as tk
 
-
 from enum import Enum
 from typing import Optional
 
@@ -154,6 +153,7 @@ class ChessBoardWidget(tk.Canvas):
             # TODO: Check the status and render it appropriately
             LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
             self.possible_moves = []
+            self.selected_cell = None
             board.log()
             self.render()
 
@@ -185,6 +185,30 @@ class ChessBoardWidget(tk.Canvas):
             self.create_oval(start_corner,end_corner,fill='grey',outline='grey')                   
       
 
+    def show_draw(self):
+        print("stalemate")
+        self.create_text((200,200), text="stalemate", fill="red", font="Arial 30 bold")
+        return
+        
+    def show_win(self, color):
+      if (color==PieceColor.WHITE):
+     	  	 print("White wins by checkmate")
+     	  	 self.create_text((200,200), text="White wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
+      else:
+       		 print("Black wins by checkmate")
+       		 self.create_text((200,200), text="Black wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
+      return
+      
+    def resign(self, color):
+      if (color==PieceColor.WHITE):
+     	  	 print("White resigned. Black wins")
+     	  	 self.create_text((200,200), text="White resigned\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
+      else:
+       		 print("Black resigned. White wins")
+       		 self.create_text((200,200), text="Black resigned\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
+      return	
+        
+
 
 def main():
     root = tk.Tk()
@@ -205,8 +229,12 @@ def main():
         Cell(PieceColor.WHITE.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reineb.png").subsample(6, 6)
     }
 
-    ChessBoardWidget(root, 800, Dpieces).pack(anchor=tk.CENTER, expand=True)
-
+    board = ChessBoardWidget(root, 400, Dpieces)
+    board.pack(anchor=tk.CENTER, expand=True)
+    tk.Button(root, text="resign", command=lambda: board.resign(PieceColor.WHITE)).pack()
+    tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
+    tk.Button(root, text="draw", command=lambda: board.show_draw()).pack()
+    
     root.mainloop()
 
 if __name__ == "__main__":
