@@ -16,6 +16,7 @@ class PieceColor(Enum):
 
     def __repr__(self):
         return self.__str__()
+        
 
 class PieceType(Enum):
     PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING = range(6)
@@ -34,7 +35,7 @@ class PieceType(Enum):
         return self.__str__()
 
 class Cell(ctypes.Structure):
-    _fields_ = [("color", ctypes.c_uint8, 1), ("type", ctypes.c_uint8, 3), ("is_empty", ctypes.c_bool)]
+    _fields_ = [("color", ctypes.c_uint8, 1), ("type", ctypes.c_uint8, 3), ("is_empty", ctypes.c_uint8, 1)]
 
     def __str__(self):
         if self.is_empty:
@@ -47,6 +48,9 @@ class Cell(ctypes.Structure):
 
     def __eq__(self, other):
         return self.is_empty == other.is_empty or (self.color == other.color and self.type == other.type)
+        
+    def __hash__(self):
+        return hash((self.color, self.type, self.is_empty))
 
 class Position(ctypes.Structure):
     _fields_ = [("col", ctypes.c_uint8), ("row", ctypes.c_uint8)]
@@ -116,17 +120,20 @@ LIBCHESS.get_piece_at.restype = Cell
 LIBCHESS.try_play_move.restype = PlayedMoveStatus
 
 class ChessBoardWidget(tk.Canvas):
-    LIGHT_COLOR = "#cccccc"
-    DARK_COLOR = "#444444"
+    LIGHT_COLOR = "#5B3C11"
+    DARK_COLOR = "#C8AD7F"
+    PIECE_COLOR = "#5B3C11"
 
-    def __init__(self, parent, size):
+    def __init__(self, parent, size, Dpieces):
         super().__init__(parent, width=size, height=size)
 
         self.cell_size: int = size // 8
         self.possible_moves: list[Position] = []
         self.selected_cell: Optional[Position] = None
+        self.Dpieces = Dpieces
 
         # TODO: Render the pieces on the board
+        self.render()
 
         def on_click(event):
             board = LIBCHESS.get_main_chess_board().contents
@@ -139,21 +146,44 @@ class ChessBoardWidget(tk.Canvas):
                     return
                 self.possible_moves = board.get_possible_moves(clicked_cell)
                 self.selected_cell = clicked_cell
+                self.render()
                 return
+            
 
             # TODO: Check the status and render it appropriately
             LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
+            self.possible_moves = []
             self.selected_cell = None
             board.log()
+            self.render()
 
         self.bind("<Button-1>", on_click)
 
+
+    def render(self):
+        board = LIBCHESS.get_main_chess_board().contents
+        board.log()
         for col in range(8):
             for row in range(8):
                 start_corner = (col * self.cell_size, row * self.cell_size)
                 end_corner = (col + 1) * self.cell_size, (row + 1) * self.cell_size
                 color = self.LIGHT_COLOR if (col + row) % 2 == 0 else self.DARK_COLOR
                 self.create_rectangle(start_corner, end_corner, fill=color, outline=color)
+        for col in range(8):
+            for row in range(8):
+                current_cell = Position(row,col)
+                piece_on_cell = board.get_piece_at(current_cell)
+                print(current_cell, piece_on_cell.is_empty, piece_on_cell)
+                if (not piece_on_cell.is_empty) :
+                    pos_y = row *self.cell_size + self.cell_size / 2
+                    pos_x= col *self.cell_size + self.cell_size /2
+                    self.create_image(pos_y,pos_x, image=self.Dpieces[piece_on_cell])
+        for case in self.possible_moves:
+            taille=40
+            start_corner=(case.col * self.cell_size+taille,case.row * self.cell_size+taille)
+            end_corner=((case.col+1) * self.cell_size-taille,(case.row+1) * self.cell_size-taille)
+            self.create_oval(start_corner,end_corner,fill='grey',outline='grey')                   
+      
 
     def show_draw(self):
         print("stalemate")
@@ -183,8 +213,23 @@ class ChessBoardWidget(tk.Canvas):
 def main():
     root = tk.Tk()
     root.title("py-chess")
+    
+    Dpieces= {
+        Cell(PieceColor.BLACK.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pion.png").subsample(10, 10),
+        Cell(PieceColor.WHITE.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pion_blanc.png").subsample(10, 10),
+        Cell(PieceColor.WHITE.value, PieceType.ROOK.value, False): tk.PhotoImage(file="frontend/Image/tourb.png").subsample(8, 6),
+        Cell(PieceColor.BLACK.value, PieceType.ROOK.value, False): tk.PhotoImage(file="frontend/Image/tourn.png").subsample(8, 6),
+        Cell(PieceColor.BLACK.value, PieceType.BISHOP.value, False): tk.PhotoImage(file="frontend/Image/foun.png").subsample(5, 6),
+        Cell(PieceColor.WHITE.value, PieceType.BISHOP.value, False): tk.PhotoImage(file="frontend/Image/foub.png").subsample(5, 6),
+        Cell(PieceColor.BLACK.value, PieceType.KNIGHT.value, False): tk.PhotoImage(file="frontend/Image/horsen.png").subsample(6, 6),
+        Cell(PieceColor.WHITE.value, PieceType.KNIGHT.value, False): tk.PhotoImage(file="frontend/Image/horseb.png").subsample(6, 6),
+        Cell(PieceColor.BLACK.value, PieceType.KING.value, False): tk.PhotoImage(file="frontend/Image/roin.png").subsample(6, 6),
+        Cell(PieceColor.WHITE.value, PieceType.KING.value, False): tk.PhotoImage(file="frontend/Image/roib.png").subsample(6, 6),
+        Cell(PieceColor.BLACK.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reinen.png").subsample(6, 6),
+        Cell(PieceColor.WHITE.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reineb.png").subsample(6, 6)
+    }
 
-    board = ChessBoardWidget(root, 400)
+    board = ChessBoardWidget(root, 400, Dpieces)
     board.pack(anchor=tk.CENTER, expand=True)
     tk.Button(root, text="resign", command=lambda: board.resign(PieceColor.WHITE)).pack()
     tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
