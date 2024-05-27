@@ -18,6 +18,11 @@ static PieceColor color_to_play = WHITE;
 
 static KingStatus king_status = NO_CHECKS;
 
+static bool white_short_can_castle = true;
+static bool black_short_can_castle = true;
+static bool white_long_can_castle = true;
+static bool black_long_can_castle = true;
+
 static struct {
     Cell moved_piece;
     Position start_position;
@@ -131,7 +136,6 @@ static size_t get_pawn_moves_line(ChessBoard board, Position pos, Position* outp
 static size_t get_pawn_diagonal_if_valid(ChessBoard board, Position pos, Position* output, PieceColor piece_color, Direction horizontal) {
     Direction pawn_direction = piece_color == WHITE ? DIR_N : DIR_S;
     Position aimed_cell = add_positions3(pos, pawn_direction, horizontal);
-    log_position(aimed_cell);
 
     if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR) {
         *output = aimed_cell;
@@ -156,41 +160,12 @@ static size_t get_possible_moves_pawn(ChessBoard board, Position pos, Position* 
     return nb_moves;
 }
 
-// static bool is_en_passant_possible(ChessBoard board, Position pos, PieceColor piece_color, Direction neighbour) {
-//     if (last_move.moved_piece.type != PAWN) return false;
-//     if (abs(last_move.end_position.row - last_move.start_position.row) != 2)
-//         return false;
-//
-//     return eq_positions(add_positions(neighbour, pos), last_move.end_position);
-// }
-//
-// static size_t get_possible_moves_pawn(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
-//     Direction pawn_direction = piece_color == WHITE ? DIR_W : DIR_E;
-//     size_t nb_moves = 0;
-//
-//     output[nb_moves++] = add_positions(pos, pawn_direction);
-//     if (pos.row == 1 || pos.row == 6)
-//         output[nb_moves++] = add_positions(pos, mul_position(pawn_direction, 2));
-//
-//     pawn_direction.col = 1;
-//     Position aimed_cell = add_positions(pos, pawn_direction);
-//     if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR || is_en_passant_possible(board, aimed_cell, piece_color, DIR_E))
-//         output[nb_moves++] = aimed_cell;
-//
-//     pawn_direction.col = -1;
-//     aimed_cell = add_positions(pos, pawn_direction);
-//     if (get_cell_state(board, aimed_cell, piece_color) == OTHER_COLOR || is_en_passant_possible(board, aimed_cell, piece_color, DIR_W))
-//         output[nb_moves++] = aimed_cell;
-//
-//     return nb_moves;
-// }
-
 static size_t get_possible_moves_rook(ChessBoard board, Position pos, Position* output, PieceColor piece_color) {
     size_t nb_moves = 0;
     nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
     nb_moves += get_moves_line(board, pos, DIR_E, piece_color, output + nb_moves);
     nb_moves += get_moves_line(board, pos, DIR_N, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_S, piece_color, output + nb_moves);
     return nb_moves;
 }
 
@@ -222,7 +197,7 @@ static size_t get_possible_moves_qween(ChessBoard board, Position pos, Position*
     nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
     nb_moves += get_moves_line(board, pos, DIR_E, piece_color, output + nb_moves);
     nb_moves += get_moves_line(board, pos, DIR_N, piece_color, output + nb_moves);
-    nb_moves += get_moves_line(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_moves_line(board, pos, DIR_S, piece_color, output + nb_moves);
     nb_moves += get_moves_line(board, pos, DIR_SE, piece_color, output + nb_moves);
     nb_moves += get_moves_line(board, pos, DIR_SW, piece_color, output + nb_moves);
     nb_moves += get_moves_line(board, pos, DIR_NE, piece_color, output + nb_moves);
@@ -240,6 +215,39 @@ static size_t get_possible_moves_king(ChessBoard board, Position pos, Position* 
     nb_moves += get_move_if_valid(board, pos, DIR_SW, piece_color, output + nb_moves);
     nb_moves += get_move_if_valid(board, pos, DIR_NE, piece_color, output + nb_moves);
     nb_moves += get_move_if_valid(board, pos, DIR_NW, piece_color, output + nb_moves);
+
+    bool long_castle_available = true;
+    bool can_long_castle = piece_color == WHITE
+        ? white_long_can_castle
+        : black_long_can_castle;
+
+    for (size_t col = 1; col < pos.col; col++) {
+        const Position aimed_cell = { .col = col, .row = pos.row };
+        if (get_cell_state(board, aimed_cell, piece_color) != FREE) {
+            long_castle_available = false;
+            break;
+        }
+    }
+
+    if (long_castle_available && can_long_castle)
+        output[nb_moves++] = (Position) { .col = 1, .row = pos.row };
+
+    bool short_castle_available = true;
+    bool can_short_castle = piece_color == WHITE
+        ? white_short_can_castle
+        : black_short_can_castle;
+
+    for (size_t col = pos.col + 1; col < 7; col++) {
+        const Position aimed_cell = { .col = col, .row = pos.row };
+        if (get_cell_state(board, aimed_cell, piece_color) != FREE) {
+            short_castle_available = false;
+            break;
+        }
+    }
+
+    if (short_castle_available && can_short_castle)
+        output[nb_moves++] = (Position) { .col = 6, .row = pos.row };
+
     return nb_moves;
 }
 
@@ -294,7 +302,6 @@ Position find_cell(ChessBoard board, Cell cell) {
     exit(1);
 }
 
-// NOTE: This functions also checks for qweens if you look for rooks or bishops.
 static bool is_in_check_by(ChessBoard board, Position king_position, PieceColor king_color, PiecesType piece_type) {
     const Cell template = { get_opposite_color(king_color), piece_type };
     Position moves_buffer[24];
@@ -302,15 +309,9 @@ static bool is_in_check_by(ChessBoard board, Position king_position, PieceColor 
     size_t nb_moves = moves_getter(board, king_position, moves_buffer, king_color);
 
     for (size_t i = 0; i < nb_moves; i++) {
-         const Cell current_cell = get_piece_at(board, moves_buffer[i]);
-         if (eq_cells(template, current_cell)) return true;
-    }
-
-    if (piece_type == ROOK || piece_type == BISHOP) {
-        const Cell qween = { get_opposite_color(king_color), QWEEN };
-        for (size_t i = 0; i < nb_moves; i++) {
-             const Cell current_cell = get_piece_at(board, moves_buffer[i]);
-             if (eq_cells(qween, current_cell)) return true;
+        const Cell current_cell = get_piece_at(board, moves_buffer[i]);
+        if (eq_cells(template, current_cell)) {
+            return true;
         }
     }
 
@@ -323,16 +324,10 @@ bool is_in_check(ChessBoard board, PieceColor king_color) {
     if (is_in_check_by(board, king_position, king_color, ROOK)) return true;
     if (is_in_check_by(board, king_position, king_color, KNIGHT)) return true;
     if (is_in_check_by(board, king_position, king_color, BISHOP)) return true;
+    if (is_in_check_by(board, king_position, king_color, QWEEN)) return true;
     if (is_in_check_by(board, king_position, king_color, KING)) return true;
-    // No need to check for the qween.
     return false;
 }
-
-
-typedef struct {
-    bool your_king_in_check;
-    KingStatus ennemy_king_status;
-} PlayedMoveStatus;
 
 
 // NOTE: currently assumes the move is legal, but checks if it leads to a self-check
@@ -350,10 +345,45 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
         return (PlayedMoveStatus) { true, NO_CHECKS };
     }
 
-    color_to_play = get_opposite_color(color_to_play);
+    // Casteling
+    bool* long_castle = color_to_play == WHITE
+        ? &white_long_can_castle
+        : &black_long_can_castle;
 
-    PieceColor enemy_color = get_opposite_color(color_to_play);
-    bool enemy_king_in_check = is_in_check(board, enemy_color);
+    bool* short_castle = color_to_play == WHITE
+        ? &white_short_can_castle
+        : &black_short_can_castle;
+
+    if (moved_piece.type == KING && end.col == 1 && *long_castle) {
+        const Position corner = { .row = end.row, .col = 0 };
+        const Position new_pos_rook = { .row = end.row, .col = 2 };
+        const Cell rook = { .color = color_to_play, .type = ROOK };
+
+        set_piece_at(board, corner, EMPTY_CELL);
+        set_piece_at(board, new_pos_rook, rook);
+        *long_castle = false;
+        *short_castle = false;
+    }
+
+    if (moved_piece.type == KING && end.col == 6 && *short_castle) {
+        const Position corner = { .row = end.row, .col = 7 };
+        const Position new_pos_rook = { .row = end.row, .col = 5 };
+        const Cell rook = { .color = color_to_play, .type = ROOK };
+
+        set_piece_at(board, corner, EMPTY_CELL);
+        set_piece_at(board, new_pos_rook, rook);
+        *long_castle = false;
+        *short_castle = false;
+    }
+
+    if (moved_piece.type == ROOK && start.col == 0) *long_castle = false;
+    if (moved_piece.type == ROOK && start.col == 7) *short_castle = false;
+
+    // Promotion
+    if (moved_piece.type == PAWN && (end.row == 0 || end.row == 7)) {
+        const Cell qween = { moved_piece.color, QWEEN };
+        set_piece_at(board, end, qween);
+    }
 
     // En passant
     if (last_move.moved_piece.type == PAWN &&
@@ -364,9 +394,14 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
         set_piece_at(board, last_move.end_position, EMPTY_CELL);
     }
 
+    PieceColor enemy_color = get_opposite_color(color_to_play);
+    bool enemy_king_in_check = is_in_check(board, enemy_color);
+
     last_move.moved_piece = moved_piece;
     last_move.start_position = start;
     last_move.end_position = end;
+
+    color_to_play = get_opposite_color(color_to_play);
 
     if (enemy_king_in_check)
         return has_moves_available(board, enemy_color)

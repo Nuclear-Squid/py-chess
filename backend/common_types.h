@@ -52,3 +52,8 @@ const Direction DIR_SW = { .col = -1, .row =  1 };
 typedef enum: u8 { OUT_OF_BOUNDS, FREE, SAME_COLOR, OTHER_COLOR } CellState;
 
 typedef enum { NO_CHECKS, CHECK, CHECK_MATE } KingStatus;
+
+typedef struct {
+    bool your_king_in_check;
+    KingStatus ennemy_king_status;
+} PlayedMoveStatus;

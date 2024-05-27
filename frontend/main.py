@@ -169,7 +169,6 @@ class ChessBoardWidget(tk.Canvas):
             LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
             self.possible_moves = []
             self.selected_cell = None
-            board.log()
             self.render()
 
         self.bind("<Button-1>", on_click)
@@ -177,7 +176,6 @@ class ChessBoardWidget(tk.Canvas):
 
     def render(self):
         board = LIBCHESS.get_main_chess_board().contents
-        board.log()
         for col in range(8):
             for row in range(8):
                 start_corner = (col * self.cell_size, row * self.cell_size)
