@@ -123,13 +123,13 @@ LIBCHESS.try_play_move.restype = PlayedMoveStatus
 
 
 def chrono(duree1,duree2,texte_timer1,texte_timer2):
-    texte_timer1['text']= str(duree1) + "s"
-    texte_timer2['text']= str(duree2) + "s"
+    texte_timer1['text']= str(round(duree1, 2)) + "s"
+    texte_timer2['text']= str(round(duree2, 2)) + "s"
     if duree1!=0 and duree2!=0 :
         if LIBCHESS.get_color_to_play() == PieceColor.WHITE:
-            threading.Timer(1.0,chrono,[duree1,duree2-1,texte_timer1,texte_timer2]).start()
+            threading.Timer(0.1, chrono, [duree1, duree2-0.1, texte_timer1, texte_timer2]).start()
         else:
-            threading.Timer(1.0,chrono,[duree1-1,duree2,texte_timer1,texte_timer2]).start()
+            threading.Timer(0.1, chrono, [duree1-0.1, duree2, texte_timer1, texte_timer2]).start()
     else :
         texte_timer1['text']= "termine"
         texte_timer2['text']= "termine"
