@@ -1,7 +1,6 @@
 #!/bin/env python3
 import ctypes
 import tkinter as tk
-import time
 import threading
 
 from enum import Enum
