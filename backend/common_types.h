@@ -56,4 +56,5 @@ typedef enum { NO_CHECKS, CHECK, CHECK_MATE } KingStatus;
 typedef struct {
     bool your_king_in_check;
     KingStatus ennemy_king_status;
+    bool draw_match;
 } PlayedMoveStatus;
