@@ -272,6 +272,33 @@ size_t get_possible_moves(ChessBoard board, Position pos, Position* output) {
     return get_moves_getter(piece.type)(board, pos, output, piece.color);
 }
 
+
+static bool is_in_check_by(ChessBoard board, Position king_position, PieceColor king_color, PiecesType piece_type) {
+    const Cell template = { get_opposite_color(king_color), piece_type };
+    Position moves_buffer[24];
+    MovesGetter moves_getter = get_moves_getter(piece_type);
+    size_t nb_moves = moves_getter(board, king_position, moves_buffer, king_color);
+
+    for (size_t i = 0; i < nb_moves; i++) {
+        const Cell current_cell = get_piece_at(board, moves_buffer[i]);
+        if (eq_cells(template, current_cell)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool is_in_check(ChessBoard board, PieceColor king_color, Position king_position) {
+    if (is_in_check_by(board, king_position, king_color, PAWN)) return true;
+    if (is_in_check_by(board, king_position, king_color, ROOK)) return true;
+    if (is_in_check_by(board, king_position, king_color, KNIGHT)) return true;
+    if (is_in_check_by(board, king_position, king_color, BISHOP)) return true;
+    if (is_in_check_by(board, king_position, king_color, QWEEN)) return true;
+    if (is_in_check_by(board, king_position, king_color, KING)) return true;
+    return false;
+}
+
 static bool has_moves_available(ChessBoard board, PieceColor color) {
     for (size_t row = 0; row < 8; row++) {
         for (size_t col = 0; col < 8; col++) {
@@ -281,8 +308,14 @@ static bool has_moves_available(ChessBoard board, PieceColor color) {
             if (current_piece.is_empty || current_piece.color != color) continue;
 
             Position moves_buffer[24];
-            if (get_possible_moves(board, piece_position, moves_buffer) > 0)
-                return true;
+            size_t nb_moves = get_possible_moves(board, piece_position, moves_buffer);
+            if (nb_moves > 0) {
+                if (current_piece.type != KING) return true;
+
+                for (size_t i = 0; i < nb_moves; i++) {
+                    if (!is_in_check(board, color, moves_buffer[i])) return true;
+                }
+            }
         }
     }
 
@@ -302,33 +335,6 @@ Position find_cell(ChessBoard board, Cell cell) {
     exit(1);
 }
 
-static bool is_in_check_by(ChessBoard board, Position king_position, PieceColor king_color, PiecesType piece_type) {
-    const Cell template = { get_opposite_color(king_color), piece_type };
-    Position moves_buffer[24];
-    MovesGetter moves_getter = get_moves_getter(piece_type);
-    size_t nb_moves = moves_getter(board, king_position, moves_buffer, king_color);
-
-    for (size_t i = 0; i < nb_moves; i++) {
-        const Cell current_cell = get_piece_at(board, moves_buffer[i]);
-        if (eq_cells(template, current_cell)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool is_in_check(ChessBoard board, PieceColor king_color) {
-    const Position king_position = find_cell(board, (Cell) { king_color, KING });
-    if (is_in_check_by(board, king_position, king_color, PAWN)) return true;
-    if (is_in_check_by(board, king_position, king_color, ROOK)) return true;
-    if (is_in_check_by(board, king_position, king_color, KNIGHT)) return true;
-    if (is_in_check_by(board, king_position, king_color, BISHOP)) return true;
-    if (is_in_check_by(board, king_position, king_color, QWEEN)) return true;
-    if (is_in_check_by(board, king_position, king_color, KING)) return true;
-    return false;
-}
-
 
 // NOTE: currently assumes the move is legal, but checks if it leads to a self-check
 PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
@@ -338,7 +344,8 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
     set_piece_at(board, start, EMPTY_CELL);
 
     // Prevent putting yourself in check, and undo move if you did
-    bool your_king_in_check = is_in_check(board, color_to_play);
+    const Position king_position = find_cell(board, (Cell) { color_to_play, KING });
+    bool your_king_in_check = is_in_check(board, color_to_play, king_position);
     if (your_king_in_check) {
         set_piece_at(board, start, moved_piece);
         set_piece_at(board, end, original_piece_at_end);
@@ -395,7 +402,8 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
     }
 
     PieceColor enemy_color = get_opposite_color(color_to_play);
-    bool enemy_king_in_check = is_in_check(board, enemy_color);
+    const Position enemy_king_position = find_cell(board, (Cell) { enemy_color, KING });
+    bool enemy_king_in_check = is_in_check(board, enemy_color, enemy_king_position);
 
     last_move.moved_piece = moved_piece;
     last_move.start_position = start;
