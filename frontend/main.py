@@ -122,24 +122,39 @@ LIBCHESS.get_piece_at.restype = Cell
 LIBCHESS.try_play_move.restype = PlayedMoveStatus
 
 
+timer: Optional[threading.Timer] = None
+
 def chrono(duree1,duree2,texte_timer1,texte_timer2,board,Dpieces):
+    global timer
     texte_timer1['text']= str(round(duree1, 2)) + "s"
     texte_timer2['text']= str(round(duree2, 2)) + "s"
+
     if (duree1<=0.0):
         board.out_time(PieceColor.BLACK)
         texte_timer1['text']= "termine"
         texte_timer2['text']= "termine"
+        return
+
     if (duree2<=0.0):
         board.out_time(PieceColor.WHITE)
         texte_timer1['text']= "termine"
         texte_timer2['text']= "termine"
-    if duree1>=0.0 and duree2>=0.0 :
-        if LIBCHESS.get_color_to_play() == PieceColor.WHITE:
-            threading.Timer(0.1, chrono, [duree1, duree2-0.1, texte_timer1, texte_timer2,board,Dpieces]).start()
-        else:
-            threading.Timer(0.1, chrono, [duree1-0.1, duree2, texte_timer1, texte_timer2,board,Dpieces]).start()
-    
+        return
 
+    if LIBCHESS.get_color_to_play() == PieceColor.WHITE:
+        timer = threading.Timer(0.1, chrono, [duree1, duree2-0.1, texte_timer1, texte_timer2,board,Dpieces])
+    else:
+        timer = threading.Timer(0.1, chrono, [duree1-0.1, duree2, texte_timer1, texte_timer2,board,Dpieces])
+    timer.start()
+
+def quit(tk_root):
+    def inner():
+        global timer
+        if not timer is None:
+            timer.cancel()
+        tk_root.destroy()
+
+    return inner
 
 class ChessBoardWidget(tk.Canvas):
     LIGHT_COLOR = "#5B3C11"
@@ -175,7 +190,7 @@ class ChessBoardWidget(tk.Canvas):
             # TODO: Check the status and render it appropriately
             move_status = LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
             if move_status.draw_match:
-            	 board.show_draw()
+                board.show_draw()
             self.possible_moves = []
             self.selected_cell = None
             self.render()
@@ -212,30 +227,30 @@ class ChessBoardWidget(tk.Canvas):
         return
 
     def show_win(self, color):
-      if (color==PieceColor.WHITE):
-     	  	 print("White wins by checkmate")
-     	  	 self.create_text((200,200), text="White wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
-      else:
-       		 print("Black wins by checkmate")
-       		 self.create_text((200,200), text="Black wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
-      return
+        if (color==PieceColor.WHITE):
+            print("White wins by checkmate")
+            self.create_text((200,200), text="White wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
+        else:
+            print("Black wins by checkmate")
+            self.create_text((200,200), text="Black wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
+        return
 
     def resign(self, color):
       if (color==PieceColor.WHITE):
-     	  	 print("White resigned. Black wins")
-     	  	 self.create_text((200,200), text="White resigned\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
+            print("White resigned. Black wins")
+            self.create_text((200,200), text="White resigned\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
       else:
-       		 print("Black resigned. White wins")
-       		 self.create_text((200,200), text="Black resigned\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
+            print("Black resigned. White wins")
+            self.create_text((200,200), text="Black resigned\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
       return
-      
+
     def out_time(self, color):
       if (color==PieceColor.WHITE):
-     	  	 print("White out of time. Black wins")
-     	  	 self.create_text((200,200), text="White out of time\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
+          print("White out of time. Black wins")
+          self.create_text((200,200), text="White out of time\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
       else:
-       		 print("Black out of time. White wins")
-       		 self.create_text((200,200), text="Black out of time\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
+          print("Black out of time. White wins")
+          self.create_text((200,200), text="Black out of time\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
       return
 
 
@@ -258,12 +273,17 @@ def main():
         Cell(PieceColor.BLACK.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reinen.png").subsample(4, 4),
         Cell(PieceColor.WHITE.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reineb.png").subsample(4, 4)
     }
+
     texte_timer1 = tk.Label(root,text="")
     texte_timer1.pack()
-    board = ChessBoardWidget(root, 700, Dpieces)
+
+    board = ChessBoardWidget(root, 600, Dpieces)
     board.pack(anchor=tk.CENTER, expand=True)
+
     texte_timer2 = tk.Label(root,text="")
     texte_timer2.pack()
+
+    tk.Button(root, text="quit", command=quit(root)).pack()
     tk.Button(root, text="resign", command=lambda: board.resign(PieceColor.WHITE)).pack()
     tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
     tk.Button(root, text="draw", command=lambda: board.show_draw()).pack()
@@ -271,7 +291,7 @@ def main():
     duree1=100.0
     duree2=100.0
     chrono(duree1,duree2,texte_timer1,texte_timer2,board,Dpieces)
-    
+
     root.mainloop()
 
 if __name__ == "__main__":
