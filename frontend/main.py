@@ -102,7 +102,8 @@ class PlayedMoveStatus(ctypes.Structure):
     _fields_ = [
         ("was_valid", ctypes.c_bool),
         ("king_status", ctypes.c_uint8),
-    ]
+        ("draw_match", ctypes.c_bool),
+           ]
 
     def __str__(self):
         valid = "Valid" if self.was_valid else "Not valid"
@@ -121,17 +122,23 @@ LIBCHESS.get_piece_at.restype = Cell
 LIBCHESS.try_play_move.restype = PlayedMoveStatus
 
 
-def chrono(duree1,duree2,texte_timer1,texte_timer2):
+def chrono(duree1,duree2,texte_timer1,texte_timer2,board,Dpieces):
     texte_timer1['text']= str(round(duree1, 2)) + "s"
     texte_timer2['text']= str(round(duree2, 2)) + "s"
-    if duree1!=0 and duree2!=0 :
-        if LIBCHESS.get_color_to_play() == PieceColor.WHITE:
-            threading.Timer(0.1, chrono, [duree1, duree2-0.1, texte_timer1, texte_timer2]).start()
-        else:
-            threading.Timer(0.1, chrono, [duree1-0.1, duree2, texte_timer1, texte_timer2]).start()
-    else :
+    if (duree1<=0.0):
+        board.out_time(PieceColor.BLACK)
         texte_timer1['text']= "termine"
         texte_timer2['text']= "termine"
+    if (duree2<=0.0):
+        board.out_time(PieceColor.WHITE)
+        texte_timer1['text']= "termine"
+        texte_timer2['text']= "termine"
+    if duree1>=0.0 and duree2>=0.0 :
+        if LIBCHESS.get_color_to_play() == PieceColor.WHITE:
+            threading.Timer(0.1, chrono, [duree1, duree2-0.1, texte_timer1, texte_timer2,board,Dpieces]).start()
+        else:
+            threading.Timer(0.1, chrono, [duree1-0.1, duree2, texte_timer1, texte_timer2,board,Dpieces]).start()
+    
 
 
 class ChessBoardWidget(tk.Canvas):
@@ -166,7 +173,9 @@ class ChessBoardWidget(tk.Canvas):
 
 
             # TODO: Check the status and render it appropriately
-            LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
+            move_status = LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
+            if move_status.draw_match:
+            	 board.show_draw()
             self.possible_moves = []
             self.selected_cell = None
             self.render()
@@ -219,6 +228,15 @@ class ChessBoardWidget(tk.Canvas):
        		 print("Black resigned. White wins")
        		 self.create_text((200,200), text="Black resigned\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
       return
+      
+    def out_time(self, color):
+      if (color==PieceColor.WHITE):
+     	  	 print("White out of time. Black wins")
+     	  	 self.create_text((200,200), text="White out of time\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
+      else:
+       		 print("Black out of time. White wins")
+       		 self.create_text((200,200), text="Black out of time\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
+      return
 
 
 
@@ -227,18 +245,18 @@ def main():
     root.title("py-chess")
 
     Dpieces= {
-        Cell(PieceColor.BLACK.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pion.png").subsample(10, 10),
-        Cell(PieceColor.WHITE.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pion_blanc.png").subsample(10, 10),
-        Cell(PieceColor.WHITE.value, PieceType.ROOK.value, False): tk.PhotoImage(file="frontend/Image/tourb.png").subsample(8, 6),
-        Cell(PieceColor.BLACK.value, PieceType.ROOK.value, False): tk.PhotoImage(file="frontend/Image/tourn.png").subsample(8, 6),
-        Cell(PieceColor.BLACK.value, PieceType.BISHOP.value, False): tk.PhotoImage(file="frontend/Image/foun.png").subsample(5, 6),
-        Cell(PieceColor.WHITE.value, PieceType.BISHOP.value, False): tk.PhotoImage(file="frontend/Image/foub.png").subsample(5, 6),
-        Cell(PieceColor.BLACK.value, PieceType.KNIGHT.value, False): tk.PhotoImage(file="frontend/Image/horsen.png").subsample(6, 6),
-        Cell(PieceColor.WHITE.value, PieceType.KNIGHT.value, False): tk.PhotoImage(file="frontend/Image/horseb.png").subsample(6, 6),
-        Cell(PieceColor.BLACK.value, PieceType.KING.value, False): tk.PhotoImage(file="frontend/Image/roin.png").subsample(6, 6),
-        Cell(PieceColor.WHITE.value, PieceType.KING.value, False): tk.PhotoImage(file="frontend/Image/roib.png").subsample(6, 6),
-        Cell(PieceColor.BLACK.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reinen.png").subsample(6, 6),
-        Cell(PieceColor.WHITE.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reineb.png").subsample(6, 6)
+        Cell(PieceColor.BLACK.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pion.png").subsample(4, 4),
+        Cell(PieceColor.WHITE.value, PieceType.PAWN.value, False): tk.PhotoImage(file="frontend/Image/pionb.png").subsample(4, 4),
+        Cell(PieceColor.WHITE.value, PieceType.ROOK.value, False): tk.PhotoImage(file="frontend/Image/tourb.png").subsample(4, 4),
+        Cell(PieceColor.BLACK.value, PieceType.ROOK.value, False): tk.PhotoImage(file="frontend/Image/tourn.png").subsample(4, 4),
+        Cell(PieceColor.BLACK.value, PieceType.BISHOP.value, False): tk.PhotoImage(file="frontend/Image/foun.png").subsample(4, 4),
+        Cell(PieceColor.WHITE.value, PieceType.BISHOP.value, False): tk.PhotoImage(file="frontend/Image/foub.png").subsample(4, 4),
+        Cell(PieceColor.BLACK.value, PieceType.KNIGHT.value, False): tk.PhotoImage(file="frontend/Image/horsen.png").subsample(4, 4),
+        Cell(PieceColor.WHITE.value, PieceType.KNIGHT.value, False): tk.PhotoImage(file="frontend/Image/horseb.png").subsample(4, 4),
+        Cell(PieceColor.BLACK.value, PieceType.KING.value, False): tk.PhotoImage(file="frontend/Image/roin.png").subsample(4, 4),
+        Cell(PieceColor.WHITE.value, PieceType.KING.value, False): tk.PhotoImage(file="frontend/Image/roib.png").subsample(4, 4),
+        Cell(PieceColor.BLACK.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reinen.png").subsample(4, 4),
+        Cell(PieceColor.WHITE.value, PieceType.QWEEN.value, False): tk.PhotoImage(file="frontend/Image/reineb.png").subsample(4, 4)
     }
     texte_timer1 = tk.Label(root,text="")
     texte_timer1.pack()
@@ -250,10 +268,10 @@ def main():
     tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
     tk.Button(root, text="draw", command=lambda: board.show_draw()).pack()
 
-    duree1=60
-    duree2=60
-    chrono(duree1,duree2,texte_timer1,texte_timer2)
-
+    duree1=100.0
+    duree2=100.0
+    chrono(duree1,duree2,texte_timer1,texte_timer2,board,Dpieces)
+    
     root.mainloop()
 
 if __name__ == "__main__":

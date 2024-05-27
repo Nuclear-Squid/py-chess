@@ -335,7 +335,6 @@ Position find_cell(ChessBoard board, Cell cell) {
     exit(1);
 }
 
-
 // NOTE: currently assumes the move is legal, but checks if it leads to a self-check
 PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
     const Cell original_piece_at_end = get_piece_at(board, end);
@@ -413,10 +412,11 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
 
     if (enemy_king_in_check)
         return has_moves_available(board, enemy_color)
-            ? (PlayedMoveStatus) { false, CHECK }
-            : (PlayedMoveStatus) { false, CHECK_MATE };
-
-    return (PlayedMoveStatus) { false, NO_CHECKS };
+            ? (PlayedMoveStatus) { false, CHECK, false }
+            : (PlayedMoveStatus) { false, CHECK_MATE, false };
+    return has_moves_available(board, enemy_color)
+        ? (PlayedMoveStatus) { false, NO_CHECKS, false }
+        : (PlayedMoveStatus) { false, NO_CHECKS, true };
 }
 
 void debug_log_chess_board(ChessBoard board) {
