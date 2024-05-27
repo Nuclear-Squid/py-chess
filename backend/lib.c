@@ -235,7 +235,7 @@ static size_t get_possible_moves_king(ChessBoard board, Position pos, Position* 
     nb_moves += get_move_if_valid(board, pos, DIR_W, piece_color, output + nb_moves);
     nb_moves += get_move_if_valid(board, pos, DIR_E, piece_color, output + nb_moves);
     nb_moves += get_move_if_valid(board, pos, DIR_N, piece_color, output + nb_moves);
-    nb_moves += get_move_if_valid(board, pos, DIR_W, piece_color, output + nb_moves);
+    nb_moves += get_move_if_valid(board, pos, DIR_S, piece_color, output + nb_moves);
     nb_moves += get_move_if_valid(board, pos, DIR_SE, piece_color, output + nb_moves);
     nb_moves += get_move_if_valid(board, pos, DIR_SW, piece_color, output + nb_moves);
     nb_moves += get_move_if_valid(board, pos, DIR_NE, piece_color, output + nb_moves);
