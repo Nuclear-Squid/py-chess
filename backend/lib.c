@@ -299,27 +299,18 @@ bool is_in_check(ChessBoard board, PieceColor king_color, Position king_position
     return false;
 }
 
-static bool has_moves_available(ChessBoard board, PieceColor color) {
-    for (size_t row = 0; row < 8; row++) {
-        for (size_t col = 0; col < 8; col++) {
-            const Position piece_position = { col, row };
-            const Cell current_piece = get_piece_at(board, piece_position);
+bool is_in_check_after_move(ChessBoard board, PieceColor king_color, Position king_position, Position start, Position end) {
+    const Cell original_piece_at_end = get_piece_at(board, end);
+    const Cell moved_piece = get_piece_at(board, start);
+    set_piece_at(board, end, moved_piece);
+    set_piece_at(board, start, EMPTY_CELL);
 
-            if (current_piece.is_empty || current_piece.color != color) continue;
+    const bool check = is_in_check(board, king_color, king_position);
 
-            Position moves_buffer[24];
-            size_t nb_moves = get_possible_moves(board, piece_position, moves_buffer);
-            if (nb_moves > 0) {
-                if (current_piece.type != KING) return true;
+    set_piece_at(board, start, moved_piece);
+    set_piece_at(board, end, original_piece_at_end);
 
-                for (size_t i = 0; i < nb_moves; i++) {
-                    if (!is_in_check(board, color, moves_buffer[i])) return true;
-                }
-            }
-        }
-    }
-
-    return false;
+    return check;
 }
 
 Position find_cell(ChessBoard board, Cell cell) {
@@ -333,6 +324,31 @@ Position find_cell(ChessBoard board, Cell cell) {
     }
 
     exit(1);
+}
+
+static bool has_moves_available(ChessBoard board, PieceColor color) {
+    const Position base_king_pos = find_cell(board, (Cell) { .type = KING, .color = color });
+    const bool check = is_in_check(board, color, base_king_pos);
+
+
+    for (size_t row = 0; row < 8; row++) {
+        for (size_t col = 0; col < 8; col++) {
+            const Position piece_position = { col, row };
+            const Cell current_piece = get_piece_at(board, piece_position);
+
+            if (current_piece.is_empty || current_piece.color != color) continue;
+
+            Position moves_buffer[24];
+            size_t nb_moves = get_possible_moves(board, piece_position, moves_buffer);
+
+            for (size_t i = 0; i < nb_moves; i++) {
+                const Position real_king_pos = current_piece.type == KING ? moves_buffer[i] : base_king_pos;
+                if (!is_in_check_after_move(board, color, real_king_pos, piece_position, moves_buffer[i])) return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 // NOTE: currently assumes the move is legal, but checks if it leads to a self-check
@@ -414,6 +430,7 @@ PlayedMoveStatus try_play_move(ChessBoard board, Position start, Position end) {
         return has_moves_available(board, enemy_color)
             ? (PlayedMoveStatus) { false, CHECK, false }
             : (PlayedMoveStatus) { false, CHECK_MATE, false };
+
     return has_moves_available(board, enemy_color)
         ? (PlayedMoveStatus) { false, NO_CHECKS, false }
         : (PlayedMoveStatus) { false, NO_CHECKS, true };

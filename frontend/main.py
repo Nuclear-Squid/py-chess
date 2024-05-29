@@ -18,6 +18,10 @@ class PieceColor(Enum):
     def __repr__(self):
         return self.__str__()
 
+    def get_opposite(self):
+        match self:
+            case PieceColor.WHITE: return PieceColor.BLACK
+            case PieceColor.BLACK: return PieceColor.WHITE
 
 class PieceType(Enum):
     PAWN, ROOK, KNIGHT, BISHOP, QWEEN, KING = range(6)
@@ -78,17 +82,18 @@ class ChessBoard((Cell * 8) * 8):
         nb_moves = LIBCHESS.get_possible_moves(self, position, moves_buffer)
         return moves_buffer[:nb_moves]
 
+    def find_cell(self, cell):
+        return LIBCHESS.find_cell(self, cell)
+
 
 class KingStatus(Enum):
-    NO_CHECKS, WHITE_IN_CHECK, BLACK_IN_CHECK, WHITE_CHECK_MATE, BLACK_CHECK_MATE = range(5)
+    NO_CHECKS, CHECK, CHECK_MATE = range(3)
 
     def __str__(self):
         match self:
-            case KingStatus.NO_CHECKS:        return "No checks"
-            case KingStatus.WHITE_IN_CHECK:   return "White in check"
-            case KingStatus.BLACK_IN_CHECK:   return "Black in check"
-            case KingStatus.WHITE_CHECK_MATE: return "Black won"
-            case KingStatus.BLACK_CHECK_MATE: return "White won"
+            case KingStatus.NO_CHECKS:  return "No checks"
+            case KingStatus.CHECK:      return "Check"
+            case KingStatus.CHECK_MATE: return "Check mate"
             case _: raise ValueError("Unknown KingStatus")
 
     def __repr__(self):
@@ -100,8 +105,8 @@ class KingStatus(Enum):
 
 class PlayedMoveStatus(ctypes.Structure):
     _fields_ = [
-        ("was_valid", ctypes.c_bool),
-        ("king_status", ctypes.c_uint8),
+        ("your_king_in_check", ctypes.c_bool),
+        ("ennemy_king_status", ctypes.c_uint8),
         ("draw_match", ctypes.c_bool),
            ]
 
@@ -120,31 +125,42 @@ LIBCHESS.get_possible_moves.restype = ctypes.c_size_t
 LIBCHESS.get_color_to_play.restype = PieceColor
 LIBCHESS.get_piece_at.restype = Cell
 LIBCHESS.try_play_move.restype = PlayedMoveStatus
+LIBCHESS.find_cell.restype = Position
 
 
 timer: Optional[threading.Timer] = None
+texte_timer1: Optional[tk.Label] = None
+texte_timer2: Optional[tk.Label] = None
 
-def chrono(duree1,duree2,texte_timer1,texte_timer2,board,Dpieces):
-    global timer
-    texte_timer1['text']= str(round(duree1, 2)) + "s"
-    texte_timer2['text']= str(round(duree2, 2)) + "s"
+def kill_timer():
+    global timer, texte_timer1, texte_timer2
+    if timer is None or texte_timer1 is None or texte_timer2 is None:
+        raise ValueError("timer or texte timer is None")
 
-    if (duree1<=0.0):
-        board.out_time(PieceColor.BLACK)
-        texte_timer1['text']= "termine"
-        texte_timer2['text']= "termine"
-        return
+    timer.cancel()
+    texte_timer1['text']= "termine"
+    texte_timer2['text']= "termine"
 
-    if (duree2<=0.0):
-        board.out_time(PieceColor.WHITE)
-        texte_timer1['text']= "termine"
-        texte_timer2['text']= "termine"
+
+def chrono(duree_noir, duree_blanc, board):
+    global timer, texte_timer1, texte_timer2
+    if texte_timer1 is None or texte_timer2 is None:
+        raise ValueError("texte timer is None")
+
+    texte_timer1['text']= str(round(duree_noir, 2)) + "s"
+    texte_timer2['text']= str(round(duree_blanc, 2)) + "s"
+
+    if duree_noir <= 0.0 or duree_blanc <= 0.0:
+        out_of_time_color = PieceColor(LIBCHESS.get_color_to_play())
+        opponent_color = out_of_time_color.get_opposite()
+        board.show_message(f"{out_of_time_color} is out of time\n{opponent_color} wins")
+        kill_timer()
         return
 
     if LIBCHESS.get_color_to_play() == PieceColor.WHITE:
-        timer = threading.Timer(0.1, chrono, [duree1, duree2-0.1, texte_timer1, texte_timer2,board,Dpieces])
+        timer = threading.Timer(0.1, chrono, [duree_noir, duree_blanc-0.1, board])
     else:
-        timer = threading.Timer(0.1, chrono, [duree1-0.1, duree2, texte_timer1, texte_timer2,board,Dpieces])
+        timer = threading.Timer(0.1, chrono, [duree_noir-0.1, duree_blanc, board])
     timer.start()
 
 def quit(tk_root):
@@ -189,16 +205,46 @@ class ChessBoardWidget(tk.Canvas):
 
             # TODO: Check the status and render it appropriately
             move_status = LIBCHESS.try_play_move(board, self.selected_cell, clicked_cell)
-            if move_status.draw_match:
-                board.show_draw()
+
             self.possible_moves = []
             self.selected_cell = None
             self.render()
+
+            if move_status.your_king_in_check:
+                taille=60
+                case = board.find_cell(Cell(color_to_play.value, PieceType.KING.value))
+                start_corner=(case.col * self.cell_size+taille,case.row * self.cell_size+taille)
+                end_corner=((case.col+1) * self.cell_size-taille,(case.row+1) * self.cell_size-taille)
+                self.create_oval(start_corner,end_corner,fill='red',outline='red')
+                threading.Timer(0.5, self.render).start()
+                return
+
+            if move_status.draw_match:
+                self.show_message("stalemate")
+                return
+
+            match KingStatus(move_status.ennemy_king_status):
+                case KingStatus.NO_CHECKS:
+                    pass
+
+                case KingStatus.CHECK:
+                    taille=60
+                    case = board.find_cell(Cell(color_to_play.get_opposite().value, PieceType.KING.value))
+                    start_corner=(case.col * self.cell_size+taille,case.row * self.cell_size+taille)
+                    end_corner=((case.col+1) * self.cell_size-taille,(case.row+1) * self.cell_size-taille)
+                    self.create_oval(start_corner,end_corner,fill='red',outline='red')
+                    return
+
+                case KingStatus.CHECK_MATE:
+                    self.show_message(f"{color_to_play} wins\nby checkmate")
+                    kill_timer()
+                    return
 
         self.bind("<Button-1>", on_click)
 
 
     def render(self):
+        self.delete("all")
         board = LIBCHESS.get_main_chess_board().contents
         for col in range(8):
             for row in range(8):
@@ -206,6 +252,7 @@ class ChessBoardWidget(tk.Canvas):
                 end_corner = (col + 1) * self.cell_size, (row + 1) * self.cell_size
                 color = self.LIGHT_COLOR if (col + row) % 2 == 0 else self.DARK_COLOR
                 self.create_rectangle(start_corner, end_corner, fill=color, outline=color)
+
         for col in range(8):
             for row in range(8):
                 current_cell = Position(row,col)
@@ -214,6 +261,7 @@ class ChessBoardWidget(tk.Canvas):
                     pos_y = row *self.cell_size + self.cell_size / 2
                     pos_x= col *self.cell_size + self.cell_size /2
                     self.create_image(pos_y,pos_x, image=self.Dpieces[piece_on_cell])
+
         for case in self.possible_moves:
             taille=40
             start_corner=(case.col * self.cell_size+taille,case.row * self.cell_size+taille)
@@ -221,41 +269,20 @@ class ChessBoardWidget(tk.Canvas):
             self.create_oval(start_corner,end_corner,fill='grey',outline='grey')
 
 
-    def show_draw(self):
-        print("stalemate")
-        self.create_text((200,200), text="stalemate", fill="red", font="Arial 30 bold")
-        return
+    def show_message(self, message):
+        border_length = self.cell_size * 8
+        center = (border_length / 2, border_length / 2)
+        self.create_text(center, text=message, anchor="center", fill="red", font="Arial 30 bold", justify="center")
 
-    def show_win(self, color):
-        if (color==PieceColor.WHITE):
-            print("White wins by checkmate")
-            self.create_text((200,200), text="White wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
-        else:
-            print("Black wins by checkmate")
-            self.create_text((200,200), text="Black wins\nby checkmate", fill="red", font="TimesNewRoman 30 bold")
-        return
-
-    def resign(self, color):
-      if (color==PieceColor.WHITE):
-            print("White resigned. Black wins")
-            self.create_text((200,200), text="White resigned\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
-      else:
-            print("Black resigned. White wins")
-            self.create_text((200,200), text="Black resigned\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
-      return
-
-    def out_time(self, color):
-      if (color==PieceColor.WHITE):
-          print("White out of time. Black wins")
-          self.create_text((200,200), text="White out of time\nBlack wins", fill="red", font="TimesNewRoman 30 bold")
-      else:
-          print("Black out of time. White wins")
-          self.create_text((200,200), text="Black out of time\nWhite wins", fill="red", font="TimesNewRoman 30 bold")
-      return
-
-
+    def resign(self):
+        resigned_color = PieceColor(LIBCHESS.get_color_to_play())
+        opponent_color = resigned_color.get_opposite()
+        self.show_message(f"{resigned_color} resigns\n{opponent_color} wins")
+        kill_timer()
 
 def main():
+    global texte_timer1, texte_timer2
+
     root = tk.Tk()
     root.title("py-chess")
 
@@ -284,13 +311,11 @@ def main():
     texte_timer2.pack()
 
     tk.Button(root, text="quit", command=quit(root)).pack()
-    tk.Button(root, text="resign", command=lambda: board.resign(PieceColor.WHITE)).pack()
-    tk.Button(root, text="gg", command=lambda: board.show_win(PieceColor.WHITE)).pack()
-    tk.Button(root, text="draw", command=lambda: board.show_draw()).pack()
+    tk.Button(root, text="resign", command=board.resign).pack()
 
-    duree1=100.0
-    duree2=100.0
-    chrono(duree1,duree2,texte_timer1,texte_timer2,board,Dpieces)
+    duree_noir  = 100.0
+    duree_blanc = 100.0
+    chrono(duree_noir, duree_blanc, board)
 
     root.mainloop()
 
